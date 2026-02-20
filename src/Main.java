@@ -1,11 +1,20 @@
+import Parsers.Extractor;
+import Parsers.LineTooLongException;
+import Parsers.LogEntry;
+import Parsers.UserAgentExtractor;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.Scanner;
 import java.io.File;
 
 public class Main {
+    @SuppressWarnings("CallToPrintStackTrace")
     public static void main(String[] args) {
         int attempts = 0;
+        int total = 0;
+        int yandexBotCount = 0;
+        int googleBotCount = 0;
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
@@ -27,38 +36,41 @@ public class Main {
             System.out.println("Путь указан верно.");
             System.out.println("Это файл номер: " + attempts);
 
-            try {
-                FileReader fileReader = new FileReader(path);
-                BufferedReader reader =
-                        new BufferedReader(fileReader);
+            try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
                 String line;
-                long totalLines = 0;
-                int maxLen = 0;
-                int minLen = Integer.MAX_VALUE;
-
                 while ((line = reader.readLine()) != null) {
                     int length = line.length();
                     if (length > 1024) {
                         throw new LineTooLongException("Строка длиной " + length + " превышает лимит 1024");
                     }
-                    totalLines++;
-                    maxLen = Math.max(maxLen, length);
-                    minLen = Math.min(minLen, length);
+
+                    total++;
+
+                    LogEntry entry = Extractor.extract(line);
+                    String program = UserAgentExtractor.extractUserAgent(entry.getUserAgent());
+
+                    if ("YandexBot".equals(program)) {
+                        yandexBotCount++;
+                    } else if ("Googlebot".equals(program)) {
+                        googleBotCount++;
+                    }
+
                 }
-
-                if (totalLines == 0) {
-                    minLen = 0;
-                    maxLen = 0;
-                }
-
-                System.out.println("Общее количество строк в файле: " + totalLines);
-                System.out.println("Длина самой короткой строки: " + minLen);
-                System.out.println("Длина самой длинной строки: " + maxLen);
-
+            } catch (LineTooLongException e) {
+                System.err.println(e.getMessage());
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
 
+            if (total == 0) {
+                System.out.println("Не найдено подходящих строк");
+            } else {
+                double yandexPart = yandexBotCount / (double) total;
+                double googlePart = googleBotCount / (double) total;
+
+                System.out.println("YandexBot: " + yandexBotCount + " (" + (yandexPart * 100) + "%)");
+                System.out.println("Googlebot: " + googleBotCount + " (" + (googlePart * 100) + "%)");
+            }
             break;
         }
     }
